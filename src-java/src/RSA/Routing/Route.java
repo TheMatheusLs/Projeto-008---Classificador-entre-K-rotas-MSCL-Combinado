@@ -146,7 +146,7 @@ public class Route {
      * 
      * @return Número de enlaces da rede
      */
-    private int getNumHops() {
+    public int getNumHops() {
         return this.path.size() - 1;
     }
 

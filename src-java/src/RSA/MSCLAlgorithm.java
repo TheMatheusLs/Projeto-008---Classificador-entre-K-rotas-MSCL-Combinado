@@ -7,6 +7,8 @@ import CallRequests.CallRequest;
 import Config.ParametersSimulation;
 import Manager.FolderManager;
 import RSA.Routing.Route;
+import PSO.PSO_config;
+import PSO.PSO_particle;
 
 public class MSCLAlgorithm {
     
@@ -120,6 +122,87 @@ public class MSCLAlgorithm {
         return false;
     }
 
+    public boolean findMSCLCombinado_PSR(List<Route> routeSolution, CallRequest callRequest, PSO_particle particle) throws Exception {
+
+        // Armazena os valores da perda de capacidade para cada rota na ordem de 'routeSolution'
+        List<Double> valuesCapacityLoss = new ArrayList<Double>();
+        
+        // Encontra a perda de capacidade para cada rota conforme o algoritmo MSCL pelo número de formas
+        for (Route currentRoute : routeSolution){
+
+            if (currentRoute != null){
+                valuesCapacityLoss.add(findSlotsAndCapacityLoss(currentRoute, callRequest, routeSolution) / 1000.0);
+            } else {
+                valuesCapacityLoss.add(Double.MAX_VALUE * 0.9);
+            }
+        }
+
+        // Aplica o PSR para encontrar a melhor rota conforme os parâmetros de entrada otimizados pelo PSO
+        // Variáveis de entrada:
+        // 1. Perda de capacidade
+        // 2. Número de saltos
+        // Objetivo:
+        // 1. Minimizar o PSR
+        double[] valuesPSR = new double[routeSolution.size()];
+
+        for (int index = 0; index < routeSolution.size(); index++){
+
+            valuesPSR[index] = getCostPSR(particle, valuesCapacityLoss.get(index), (double)routeSolution.get(index).getNumHops() / 5.0);
+            
+        }
+
+        // Encontra o índice com o menor valor da lista 'valuesPSR'
+        int bestIndexPSR = 0;
+        double minValuePSR = valuesPSR[0];
+
+        for (int index = 1; index < routeSolution.size(); index++){
+
+            if (minValuePSR > valuesPSR[index]){ // Se for igual, escolher a menor rota
+
+                minValuePSR = valuesPSR[index];
+                bestIndexPSR = index;
+
+            }
+        }
+
+        this.route = routeSolution.get(bestIndexPSR);
+        this.fSlots = this.slotsMSCL.get(bestIndexPSR);
+
+        // Calcula o tamanho da requisição
+        int reqNumbOfSlots = this.route.getReqSize(callRequest.getSelectedBitRate());
+        callRequest.setReqNumbOfSlots(reqNumbOfSlots);
+        return true;
+    }
+
+    private double getCostPSR(PSO_particle particle, double capacityLoss, double numberOfHops) throws Exception {
+
+        // Ler a posição da partícula
+        double[] position = particle.getPosition();
+
+        // Calcula o PSR. O PSR é uma série de potência que considera a perda de capacidade, o número de saltos. A posição da partícula são os coeficientes do PSR
+        double PSR = 0.0;
+
+        int N = PSO_config.getPsrterms();
+
+        // Primeira variável do PSR
+        for (int i = -N; i <= N; i++){
+
+            // Segunda variável do PSR
+            for (int j = -N; j <= N; j++){
+
+                // Calcula o índice da posição da partícula para a variável i e j considerando que o valor varia de -N até N. Com um vetor de tamanho (N^2 + 1)^2
+                int indexPSR = (i + N) * (2 * N + 1) + (j + N);
+
+
+                PSR += position[indexPSR] * Math.pow(capacityLoss, i) * Math.pow(numberOfHops, j);
+
+            }
+        }
+
+        return PSR;
+    }
+
+
     /*
      * Essa função calcula a perda de capacidade para a rota principal e para as rotas interferentes em busca do melhor slot para alocar a requisição.
      * 
@@ -144,10 +227,6 @@ public class MSCLAlgorithm {
         
         // Armazena todos os possíveis tamanhos de requisição para cada valor de bitrate para a maior modulação possível nessa rota
         final int[] possibleSlotsByRoute = currentRoute.getAllReqSizes();
-
-        if (reqID == 10001){
-            System.out.println("Req = " + reqID);
-        }
 
         List<MSCLApeture> allAperturesInMainRoute;
         boolean isPossibleToAlocateReq;
@@ -221,11 +300,11 @@ public class MSCLAlgorithm {
         bestIndexSlot = MSCL_return[0];
         bestCapacityLoss = MSCL_return[1];
 
-        // Armazena os dados para a rota e demanda
-        if ((reqID > 10000) && (reqID % 4 == 0)) { // Se já estiver na zona de estabilidade
+        // // Armazena os dados para a rota e demanda
+        // if ((reqID > 10000) && (reqID % 4 == 0)) { // Se já estiver na zona de estabilidade
 
-            //this.folderManager.saveDataBinListsMetricsLists(reqID, reqNumbOfSlots, currentRoute, MSCL_return);
-        }
+        //     //this.folderManager.saveDataBinListsMetricsLists(reqID, reqNumbOfSlots, currentRoute, MSCL_return);
+        // }
 
         // Cria uma lista com os slots necessários para alocar a requisição com a melhor perda de capacidade
         List<Integer> slotsReq = new ArrayList<Integer>();

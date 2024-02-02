@@ -36,7 +36,10 @@ public class RoutesManager {
      * Número de rotas que o algoritmo YEN irá buscar.
      */
     private int numberOfRoutesToFind;
-    
+
+    private int maxHopsRoute;
+    private int maxIRoutes;
+
     /**
      * Construtor da classe RoutesManager
      * 
@@ -130,6 +133,25 @@ public class RoutesManager {
 
         // Imprime na tela as rotas
         //System.out.println(this);
+
+        //Encontra o maior número de saltos entre as rotas
+        this.maxHopsRoute = 0;
+        this.maxIRoutes = 0;
+        for (List<Route> routes : this.allRoutes){
+            for (Route route : routes){
+                if (route != null){
+                    if (route.getNumHops() > this.maxHopsRoute){
+                        this.maxHopsRoute = route.getNumHops();
+                    }
+
+                    if (route.getAllConflictRoutes().size() > this.maxIRoutes){
+                        this.maxIRoutes = route.getAllConflictRoutes().size();
+                    }
+                }
+            }
+        }
+
+
     }
 
     /**
@@ -375,5 +397,13 @@ public class RoutesManager {
 
     public List<List<Route>> getAllRoutes() {
         return allRoutes;
+    }
+
+    public int getMaxHopsRoute() {
+        return maxHopsRoute;
+    }
+
+    public int getMaxIRoutes() {
+        return maxIRoutes;
     }
 }

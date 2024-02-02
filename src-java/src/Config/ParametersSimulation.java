@@ -22,14 +22,14 @@ public class ParametersSimulation{
 
     // Configura o número e as cargas para simulação
     final static double minLoadNetwork = 260; 
-    final static double maxLoadNetwork = 300;
-    final static int numberOfPointsLoadNetwork = 5;
+    final static double maxLoadNetwork = 280;
+    final static int numberOfPointsLoadNetwork = 1;
     final static int numberOfSimulationsPerLoadNetwork = 1; 
     
     // Seleciona a topologia da rede
     final static TopologyType topologyType = TopologyType.NSFNet;
     final static int numberOfSlotsPerLink = 128;
-    final static long maxNumberOfRequisitions = (long) 1000000;
+    final static long maxNumberOfRequisitions = (long) 500000;
     final static int maxNumberOfBlockedRequests = 500;
     
     // Algoritmo de Roteamento

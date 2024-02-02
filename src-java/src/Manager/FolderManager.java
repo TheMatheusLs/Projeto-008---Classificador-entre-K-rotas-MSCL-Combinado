@@ -76,7 +76,7 @@ public class FolderManager {
      * @param fileName
      * @param content
      */
-    private void writeFile(String fileName, String content) {
+    public void writeFile(String fileName, String content) {
 
         File file = new File(this.folderPath + "/" + fileName);
         try {

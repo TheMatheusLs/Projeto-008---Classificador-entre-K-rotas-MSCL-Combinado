@@ -11,6 +11,7 @@ import GeneralClasses.ProbabilityFunctions;
 import Manager.FolderManager;
 import Manager.SimulationResults;
 import Network.TopologyManager;
+import PSO.PSO_particle;
 import RSA.RSAManager;
 import RSA.Routing.Route;
 import RSA.Routing.RoutesManager;
@@ -33,6 +34,9 @@ public class Simulation {
     private Random randomGeneration;
     private TopologyManager topology;
     private RSAManager rsaManager;
+
+    public int maxHopsRoute;
+    public int maxIRoutes;
 
     /**
      * Construtor da classe Simulation
@@ -64,6 +68,10 @@ public class Simulation {
         // Cria uma nova instância de routing
         this.routesManager = new RoutesManager(this.topology);
         this.routesManager.save(folderManager);
+
+        this.maxHopsRoute = this.routesManager.getMaxHopsRoute();
+        this.maxIRoutes = this.routesManager.getMaxIRoutes();
+
 
         this.folderManager.setNetworkOpticalLinks(this.topology.getNetworkOpticalLinks());
 
@@ -301,6 +309,133 @@ public class Simulation {
     }
 
     /**
+     * Executa uma única simulação da rede usando a partícula do PSO para o PSR do MSCL Combinado
+     * 
+     * @param networkLoad Carga da rede
+     * @param simulationResults Classe para armazenar os resultados
+     * @return simulationResults
+     * @throws Exception
+     */
+    public SimulationResults runSingleLoad_PSR(double networkLoad, SimulationResults simulationResults, PSO_particle particle) throws Exception {
+        
+        this.randomGeneration = new Random(simulationResults.getCurrentRandomSeed());
+        
+        final long geralInitTime = System.currentTimeMillis();
+
+        final double meanRateCallDur = ConfigSimulator.getMeanRateOfCallsDuration();
+        final long numberMaxOfRequisitions = ParametersSimulation.getMaxNumberOfRequisitions();
+        final CallRequestType callRequestType = ParametersSimulation.getCallRequestType();
+        final int[] possibleBitRates = ParametersSimulation.getTrafficOption();
+        final StopCriteriaType stopCriteria = ParametersSimulation.getStopCriteriaType();  
+
+        int source, destination;
+        double timeSim = 0.0;
+        boolean hasSlots, hasQoT;
+        int	numBlockBySlots = 0;
+		int numBlockByQoT = 0;
+        long limitCallRequest = 0; 
+
+        long cyclesMSCL = 0;
+
+        final CallRequestManager listOfCalls = new CallRequestManager();
+
+        // Loop para cada requisição simulada
+        LOOP_REQ : for(int iReq = 1; iReq <= numberMaxOfRequisitions; iReq++){
+
+            this.folderManager.setReqID(iReq);
+
+            // Apresenta o progresso para a simulação
+            if ((iReq % 10000) == 0){
+                System.out.print(">");
+            }
+
+            // Informa que não houve bloqueio por slots ou QoT
+            hasSlots = false; 
+            hasQoT = false;
+
+            do{ 
+                source = (int) Math.floor(this.randomGeneration.nextDouble() * this.topology.getNumberOfNodes());		//TODO: Após terminar de testa o simulador, colocar essa linha fora do loop do		
+                destination = (int) Math.floor(this.randomGeneration.nextDouble() * this.topology.getNumberOfNodes());				
+            } while(source == destination);
+
+            // Remove as requisição espiradas
+            listOfCalls.removeCallRequest(timeSim);
+
+            timeSim += ProbabilityFunctions.exponentialDistribution(networkLoad, this.randomGeneration);
+
+            final CallRequest callRequest = new CallRequest(iReq, source, destination, callRequestType, possibleBitRates, timeSim, meanRateCallDur, this.randomGeneration);
+
+            if (ParametersSimulation.getTopologyType().equals(TopologyType.IRoutes)){
+                source = (int) Math.floor(this.randomGeneration.nextDouble() * 4);
+            }
+
+            // Executa o problema do RSA
+            this.rsaManager.findRouteAndSlots_PSR(source, destination, callRequest, particle);
+            Route route = this.rsaManager.getRoute();
+            List<Integer> fSlotsIndex = this.rsaManager.getSlotsIndex();
+            cyclesMSCL += this.rsaManager.getCyclesMSCL();
+
+            if (route != null){
+
+                if(!fSlotsIndex.isEmpty() && fSlotsIndex.size() == callRequest.getReqNumbOfSlots()){	// NOPMD by Andr� on 13/06/17 13:12
+					hasSlots = true;
+				}
+
+                hasQoT = route.isQoT();
+
+                if(hasSlots && hasQoT){
+					callRequest.setFrequencySlots(fSlotsIndex);
+					callRequest.setRoute(route);
+
+                    // Incrementar os slots que estão sendo utilizados pelas rotas
+					route.incrementSlotsOcupy(fSlotsIndex);
+
+					callRequest.allocate(topology.getListOfNodes());
+					listOfCalls.addCall(callRequest);
+				}
+
+            }
+
+            if(!hasSlots){
+				numBlockBySlots++;
+			}else if(!hasQoT){
+				numBlockByQoT++; 
+			}
+
+            limitCallRequest = iReq;
+
+            if (stopCriteria == StopCriteriaType.BlockedCallRequest){
+                if ((numBlockBySlots + numBlockByQoT) >= ParametersSimulation.getMaxNumberOfBlockedRequests()){
+                    break LOOP_REQ;
+                }
+            }
+
+        } // End LOOP_REQ
+        
+        System.out.println("\n\n");
+
+        listOfCalls.desallocateAllRequests(); // Remove todas as requisições alocadas
+
+        this.checkTopologyAndRouting();
+
+        listOfCalls.eraseCallList();
+
+        // Calcula o tempo final de uma simulação
+        final long geralEndTime = System.currentTimeMillis();
+
+        final long geralTotalTime = geralEndTime - geralInitTime;
+        simulationResults.setExecutionTime(geralTotalTime);
+
+        double PB = (double)(numBlockBySlots + numBlockByQoT) / limitCallRequest;
+        simulationResults.setProbabilityBlocking(PB);
+        simulationResults.setNumBlockBySlots(numBlockBySlots);
+        simulationResults.setNumBlockByQoT(numBlockByQoT);
+        simulationResults.setMSCLCycle(cyclesMSCL);
+
+        return simulationResults;
+    }
+
+    /**
      * Método para verificar a topologia e rotas
      * 
      * @throws Exception
@@ -312,4 +447,13 @@ public class Simulation {
 		// Verifica se todas as rotas estão limpas
         this.routesManager.checkIfIsClean();
     } 
+
+    /**
+     * Retorna a pasta para armazenar os resultados e as configurações da simulação
+     * 
+     * @return folderManager
+     */
+    public FolderManager getFolderManager() {
+        return folderManager;
+    }
 }

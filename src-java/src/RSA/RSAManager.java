@@ -8,6 +8,7 @@ import CallRequests.CallRequest;
 import Config.ParametersSimulation;
 import Manager.FolderManager;
 import Network.Structure.OpticalLink;
+import PSO.PSO_particle;
 import RSA.Routing.Route;
 import RSA.Routing.RoutesManager;
 import RSA.Spectrum.Algorithms.FirstFit;
@@ -230,6 +231,31 @@ public class RSAManager {
                 break;
             } 
         }
+    }
+
+    /**
+     * Método para gerenciar os algoritmos de roteamento MSCL usando a partícula do PSO.	
+     * 
+     * @param source Origem 
+     * @param destination Destino
+     * @param callRequest Requisição
+     * @throws Exception
+     */
+    public void findRouteAndSlots_PSR(int source, int destination, CallRequest callRequest, PSO_particle particle) throws Exception {
+        
+        
+        // Captura as rotas para o par origem destino
+        List<Route> routeSolution = this.routesManager.getRoutesForOD(source, destination);
+
+        MSCLAlgorithm msclAlgorithm = new MSCLAlgorithm(this.folderManager);
+
+        if (routingOption == RoutingAlgorithmType.MSCLCombinado){
+            msclAlgorithm.findMSCLCombinado_PSR(routeSolution, callRequest, particle);
+        }
+        this.route = msclAlgorithm.getRoute();
+        this.fSlots = msclAlgorithm.getSlotsIndex();
+        this.cycleMSCL = msclAlgorithm.getCyclesMSCL();
+        
     }
 
     /**
